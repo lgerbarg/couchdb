@@ -22,6 +22,8 @@ mochiweb_file_collection = \
     mochinum.erl \
     mochiweb.erl \
     mochiweb_app.erl \
+    mochiweb_buffer.erl \
+    mochiweb_buffer_process.erl \
     mochiweb_charref.erl \
     mochiweb_cookies.erl \
     mochiweb_echo.erl \
@@ -49,6 +51,8 @@ mochiwebebin_make_generated_file_list = \
     mochinum.beam \
     mochiweb.beam \
     mochiweb_app.beam \
+    mochiweb_buffer.beam \
+    mochiweb_buffer_process.beam \
     mochiweb_charref.beam \
     mochiweb_cookies.beam \
     mochiweb_echo.beam \

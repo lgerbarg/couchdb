@@ -3,7 +3,7 @@
 
 %% @doc Response abstraction.
 
--module(mochiweb_response, [Request, Code, Headers]).
+-module(mochiweb_response, [Request, Code, Headers, Buffer]).
 -author('bob@mochimedia.com').
 
 -define(QUIP, "Any of you quaids got a smint?").
@@ -47,6 +47,29 @@ send(Data) ->
 %% @doc Write a chunk of a HTTP chunked response. If Data is zero length,
 %%      then the chunked response will be finished.
 write_chunk(Data) ->
+    case Buffer of
+        unbuffered ->
+            write_chunk(Data, unbuffered);
+        _ ->
+            write_chunk(Data, buffered)
+    end.
+
+write_chunk(Data, buffered) ->
+    case Data of
+        "" ->
+            BufferedData = Buffer:flush(),
+            write_chunk(BufferedData, unbuffered),
+            write_chunk("", unbuffered);
+        _ ->
+            case Buffer:append(Data) of
+                ok ->
+                    ok;
+                BufferedData ->
+                    write_chunk(BufferedData, unbuffered)
+            end
+    end;
+
+write_chunk(Data, unbuffered) ->
     case Request:get(version) of
         Version when Version >= {1, 1} ->
             Length = iolist_size(Data),

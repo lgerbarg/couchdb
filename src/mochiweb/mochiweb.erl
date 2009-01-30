@@ -7,7 +7,7 @@
 -author('bob@mochimedia.com').
 
 -export([start/0, stop/0]).
--export([new_request/1, new_response/1]).
+-export([new_request/1, new_response/1, new_buffer/1]).
 -export([all_loaded/0, all_loaded/1, reload/0]).
 -export([test/0]).
 
@@ -87,12 +87,21 @@ new_request({Socket, {Method, '*'=Uri, Version}, Headers}) ->
                          Version,
                          mochiweb_headers:make(Headers)).
 
-%% @spec new_response({Request, integer(), Headers}) -> MochiWebResponse
+%% @spec new_response({Request, integer(), Headers, Buffer | unbuffered}) -> MochiWebResponse
 %% @doc Return a mochiweb_response data structure.
-new_response({Request, Code, Headers}) ->
+new_response({Request, Code, Headers, Buffer}) ->
     mochiweb_response:new(Request,
                           Code,
-                          mochiweb_headers:make(Headers)).
+                          mochiweb_headers:make(Headers),
+                          Buffer).
+
+%% @spec new_response() -> MochiWebBuffer
+%% @doc Return a mochiweb_buffer data structure.
+new_buffer(Transform) ->
+    mochiweb_buffer:new(mochiweb_buffer_process:make(),
+                        Transform,
+                        none).
+
 
 %% Internal API
 

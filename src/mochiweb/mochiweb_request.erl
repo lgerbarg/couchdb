@@ -14,7 +14,7 @@
 -export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
 -export([send/1, recv/1, recv/2, recv_body/0, recv_body/1]).
 -export([start_response/1, start_response_length/1, start_raw_response/1]).
--export([respond/1, ok/1]).
+-export([respond/1, respond_encoded/1, ok/1]).
 -export([not_found/0, not_found/1]).
 -export([parse_post/0, parse_qs/0]).
 -export([should_close/0, cleanup/0]).
@@ -155,7 +155,7 @@ body_length() ->
                     list_to_integer(Length)
             end;
         "chunked" ->
-            chunked;
+             chunked;
         Unknown ->
             {unknown_transfer_encoding, Unknown}
     end.
@@ -199,23 +199,23 @@ recv_body(MaxBody) ->
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders. The server will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
-start_response({Code, ResponseHeaders}) ->
+start_response({Code, ResponseHeaders, Buffer}) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse1 = mochiweb_headers:default_from_list(server_headers(),
                                                     HResponse),
-    start_raw_response({Code, HResponse1}).
+    start_raw_response({Code, HResponse1,Buffer}).
 
 %% @spec start_raw_response({integer(), headers()}) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders.
-start_raw_response({Code, ResponseHeaders}) ->
+start_raw_response({Code, ResponseHeaders, Buffer}) ->
     F = fun ({K, V}, Acc) ->
                 [make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
         end,
     End = lists:foldl(F, [<<"\r\n">>],
                       mochiweb_headers:to_list(ResponseHeaders)),
     send([make_version(Version), make_code(Code), <<"\r\n">> | End]),
-    mochiweb:new_response({THIS, Code, ResponseHeaders}).
+    mochiweb:new_response({THIS, Code, ResponseHeaders, Buffer}).
 
 
 %% @spec start_response_length({integer(), ioheaders(), integer()}) -> response()
@@ -226,7 +226,7 @@ start_raw_response({Code, ResponseHeaders}) ->
 start_response_length({Code, ResponseHeaders, Length}) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
-    start_response({Code, HResponse1}).
+    start_response({Code, HResponse1, unbuffered}).
 
 %% @spec respond({integer(), ioheaders(), iodata() | chunked | {file, IoDevice}}) -> response()
 %% @doc Start the HTTP response with start_response, and send Body to the
@@ -264,7 +264,53 @@ respond({Code, ResponseHeaders, chunked}) ->
                          put(?SAVE_FORCE_CLOSE, true),
                          HResponse
                  end,
-    start_response({Code, HResponse1});
+    start_response({Code, HResponse1, unbuffered});
+respond({Code, ResponseHeaders, buffered}) ->
+    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse1 = case Method of
+                     'HEAD' ->
+                         %% This is what Google does, http://www.google.com/
+                         %% is chunked but HEAD gets Content-Length: 0.
+                         %% The RFC is ambiguous so emulating Google is smart.
+                         mochiweb_headers:enter("Content-Length", "0",
+                                                HResponse);
+                     _ when Version >= {1, 1} ->
+                         %% Only use chunked encoding for HTTP/1.1
+                         mochiweb_headers:enter("Transfer-Encoding", "chunked",
+                                                HResponse);
+                     _ ->
+                         %% For pre-1.1 clients we send the data as-is
+                         %% without a Content-Length header and without
+                         %% chunk delimiters. Since the end of the document
+                         %% is now ambiguous we must force a close.
+                         put(?SAVE_FORCE_CLOSE, true),
+                         HResponse
+                 end,
+    start_response({Code, HResponse1, mochiweb:new_buffer(identity)});
+respond({Code, ResponseHeaders, bufferedAndZipped}) ->
+    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse2 = case Method of
+                     'HEAD' ->
+                         %% This is what Google does, http://www.google.com/
+                         %% is chunked but HEAD gets Content-Length: 0.
+                         %% The RFC is ambiguous so emulating Google is smart.
+                         mochiweb_headers:enter("Content-Length", "0",
+                                                HResponse);
+                     _ when Version >= {1, 1} ->
+                         %% Only use chunked encoding for HTTP/1.1
+                         HResponse1 = mochiweb_headers:enter("Transfer-Encoding",
+                                                             "chunked",
+                                                             HResponse),
+                         mochiweb_headers:enter("Content-Encoding", "gzip", HResponse1);
+                     _ ->
+                         %% For pre-1.1 clients we send the data as-is
+                         %% without a Content-Length header and without
+                         %% chunk delimiters. Since the end of the document
+                         %% is now ambiguous we must force a close.
+                         put(?SAVE_FORCE_CLOSE, true),
+                         HResponse
+                 end,
+    start_response({Code, HResponse2, mochiweb:new_buffer(gzip)});
 respond({Code, ResponseHeaders, Body}) ->
     Response = start_response_length({Code, ResponseHeaders, iolist_size(Body)}),
     case Method of
@@ -274,6 +320,14 @@ respond({Code, ResponseHeaders, Body}) ->
             send(Body)
     end,
     Response.
+
+respond_encoded({Code, ResponseHeaders, none, Body}) ->
+    respond({Code, ResponseHeaders, Body});
+respond_encoded({Code, ResponseHeaders, gzip, Body}) ->
+    HResponse = mochiweb_headers:make(ResponseHeaders),
+    CompressedBody = zlib:gzip(Body),
+    HResponse1 = mochiweb_headers:enter("Content-Encoding", "gzip", HResponse),
+    respond({Code,HResponse1,CompressedBody}).
 
 %% @spec not_found() -> response()
 %% @doc Alias for <code>not_found([])</code>.

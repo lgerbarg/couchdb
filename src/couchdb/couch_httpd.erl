@@ -153,7 +153,7 @@ handle_request(MochiReq, UrlHandlers, DbUrlHandlers) ->
             send_error(HttpReq, Error);
         Tag:Error ->
             ?LOG_ERROR("Uncaught error in HTTP request: ~p",[{Tag, Error}]),
-            ?LOG_DEBUG("Stacktrace: ~p",[erlang:get_stacktrace()]),
+            ?LOG_ERROR("Stacktrace: ~p",[erlang:get_stacktrace()]),
             send_error(HttpReq, Error)
     end,
 
@@ -317,9 +317,53 @@ basic_username_pw(Req) ->
         nil
     end.
 
+choose_encoding(MochiReq) ->
+    AcceptEncoding = MochiReq:get_header_value("accept-encoding"),
+    case AcceptEncoding of
+         undefined ->
+             none;
+         _ ->
+             Encodings = string:tokens(AcceptEncoding, ", "),
+             lists:foldl(fun(Element, Acc) ->
+                             case Acc of
+                                 gzip ->
+                                     gzip;
+                                 deflate ->
+                                     case Element of
+                                         "gzip" ->
+                                             gzip;
+                                         _ ->
+                                             deflate
+                                     end;
+                                 none ->
+                                      case Element of
+                                         "gzip" ->
+                                              gzip;
+                                          "deflate" ->
+                                              deflate;
+                                         _ ->
+                                              none
+                                     end;
+                                 _ ->
+                                     none
+                             end
+                         end,
+                         none, Encodings)
+    end.
+
+
 
 start_chunked_response(#httpd{mochi_req=MochiReq}, Code, Headers) ->
-    {ok, MochiReq:respond({Code, Headers ++ server_header(), chunked})}.
+    Compression = choose_encoding(MochiReq),
+    case Compression of
+        gzip ->
+            BufferType = bufferedAndZipped;
+        deflate ->
+            BufferType = buffered;
+        none ->
+            BufferType = buffered
+        end,
+      {ok, MochiReq:respond({Code, Headers ++ server_header(), BufferType})}.
 
 send_chunk(Resp, Data) ->
     Resp:write_chunk(Data),
@@ -330,7 +374,8 @@ send_response(#httpd{mochi_req=MochiReq}, Code, Headers, Body) ->
         ?LOG_DEBUG("HTTPd ~p error response:~n ~s", [Code, Body]);
     true -> ok
     end,
-    {ok, MochiReq:respond({Code, Headers ++ server_header(), Body})}.
+    Compression = choose_encoding(MochiReq),
+    {ok, MochiReq:respond_encoded({Code, Headers ++ server_header(), Compression, Body})}.
 
 send_method_not_allowed(Req, Methods) ->
     send_response(Req, 405, [{"Allow", Methods}], <<>>).

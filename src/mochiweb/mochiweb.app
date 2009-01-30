@@ -8,6 +8,8 @@
         mochinum,
         mochiweb,
         mochiweb_app,
+        mochiweb_buffer,
+        mochiweb_buffer_process,
         mochiweb_charref,
         mochiweb_cookies,
         mochiweb_echo,

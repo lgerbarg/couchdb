@@ -153,7 +153,7 @@ handle_request(MochiReq, UrlHandlers, DbUrlHandlers) ->
             send_error(HttpReq, Error);
         Tag:Error ->
             ?LOG_ERROR("Uncaught error in HTTP request: ~p",[{Tag, Error}]),
-            ?LOG_ERROR("Stacktrace: ~p",[erlang:get_stacktrace()]),
+            ?LOG_DEBUG("Stacktrace: ~p",[erlang:get_stacktrace()]),
             send_error(HttpReq, Error)
     end,
 

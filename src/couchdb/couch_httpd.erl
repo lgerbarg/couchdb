@@ -317,44 +317,8 @@ basic_username_pw(Req) ->
         nil
     end.
 
-choose_encoding(MochiReq) ->
-    AcceptEncoding = MochiReq:get_header_value("accept-encoding"),
-    case AcceptEncoding of
-         undefined ->
-             none;
-         _ ->
-             Encodings = string:tokens(AcceptEncoding, ", "),
-             lists:foldl(fun(Element, Acc) ->
-                             case Acc of
-                                 gzip ->
-                                     gzip;
-                                 deflate ->
-                                     case Element of
-                                         "gzip" ->
-                                             gzip;
-                                         _ ->
-                                             deflate
-                                     end;
-                                 none ->
-                                      case Element of
-                                         "gzip" ->
-                                              gzip;
-                                          "deflate" ->
-                                              deflate;
-                                         _ ->
-                                              none
-                                     end;
-                                 _ ->
-                                     none
-                             end
-                         end,
-                         none, Encodings)
-    end.
-
-
-
 start_chunked_response(#httpd{mochi_req=MochiReq}, Code, Headers) ->
-    Compression = choose_encoding(MochiReq),
+    Compression = MochiReq:densest_accepted_encoding(),
     case Compression of
         gzip ->
             BufferType = bufferedAndZipped;
@@ -374,7 +338,7 @@ send_response(#httpd{mochi_req=MochiReq}, Code, Headers, Body) ->
         ?LOG_DEBUG("HTTPd ~p error response:~n ~s", [Code, Body]);
     true -> ok
     end,
-    Compression = choose_encoding(MochiReq),
+    Compression = MochiReq:densest_accepted_encoding(),
     {ok, MochiReq:respond_encoded({Code, Headers ++ server_header(), Compression, Body})}.
 
 send_method_not_allowed(Req, Methods) ->

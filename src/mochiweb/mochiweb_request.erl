@@ -19,6 +19,7 @@
 -export([parse_post/0, parse_qs/0]).
 -export([should_close/0, cleanup/0]).
 -export([parse_cookie/0, get_cookie_value/1]).
+-export([densest_accepted_encoding/0]).
 -export([serve_file/2, serve_file/3]).
 -export([test/0]).
 
@@ -514,6 +515,41 @@ read_chunk(Length) ->
         _ ->
             exit(normal)
     end.
+
+densest_accepted_encoding() ->
+    AcceptedEncoding = get_header_value("accept-encoding"),
+    case AcceptedEncoding of
+         undefined ->
+             none;
+         _ ->
+             Encodings = string:tokens(AcceptedEncoding, ", "),
+             lists:foldl(fun(Element, Acc) ->
+                             case Acc of
+                                 gzip ->
+                                     gzip;
+                                 deflate ->
+                                     case Element of
+                                         "gzip" ->
+                                             gzip;
+                                         _ ->
+                                             deflate
+                                     end;
+                                 none ->
+                                      case Element of
+                                         "gzip" ->
+                                              gzip;
+                                          "deflate" ->
+                                              deflate;
+                                         _ ->
+                                              none
+                                     end;
+                                 _ ->
+                                     none
+                             end
+                         end,
+                         none, Encodings)
+    end.
+
 
 %% @spec serve_file(Path, DocRoot) -> Response
 %% @doc Serve a file relative to DocRoot.

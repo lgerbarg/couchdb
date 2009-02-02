@@ -287,7 +287,7 @@ respond({Code, ResponseHeaders, buffered}) ->
                          put(?SAVE_FORCE_CLOSE, true),
                          HResponse
                  end,
-    start_response({Code, HResponse1, mochiweb:new_buffer(identity)});
+    start_response({Code, HResponse1, mochiweb:new_buffer(none)});
 respond({Code, ResponseHeaders, bufferedAndZipped}) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse2 = case Method of

@@ -13,9 +13,16 @@ loop(Data) ->
         shutdown ->
             ok;
         {From,append,NewData} ->
-          FullData = Data ++ NewData,
-          From ! lists:flatlength(FullData),
-          loop(FullData);
+            if binary(NewData) ->
+               ListData = binary_to_list(NewData);
+            list(NewData) ->
+               ListData = NewData;
+            true ->
+               ListData = []
+            end,
+            FullData = Data ++ ListData,
+            From ! lists:flatlength(FullData),
+            loop(FullData);
         {From,push} ->
             From ! Data,
             loop([])

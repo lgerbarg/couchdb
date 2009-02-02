@@ -97,10 +97,21 @@ new_response({Request, Code, Headers, Buffer}) ->
 
 %% @spec new_response() -> MochiWebBuffer
 %% @doc Return a mochiweb_buffer data structure.
+new_buffer(none) ->
+    mochiweb_buffer:new(mochiweb_buffer_process:make(),
+                        none,
+                        none);
 new_buffer(Transform) ->
+    Z = zlib:open(),
+    case Transform of 
+        gzip -> 
+            zlib:deflateInit(Z, default, deflated, 31, 8, default);
+        _ ->
+            ok
+    end,
     mochiweb_buffer:new(mochiweb_buffer_process:make(),
                         Transform,
-                        none).
+                        Z).
 
 
 %% Internal API

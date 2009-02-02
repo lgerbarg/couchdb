@@ -57,7 +57,7 @@ write_chunk(Data) ->
 write_chunk(Data, buffered) ->
     case Data of
         "" ->
-            BufferedData = Buffer:flush(),
+            BufferedData = Buffer:close(),
             write_chunk(BufferedData, unbuffered),
             write_chunk("", unbuffered);
         _ ->

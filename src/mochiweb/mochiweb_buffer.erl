@@ -1,19 +1,19 @@
 %% @doc MochiWebBuffer.
 
--module(mochiweb_buffer, [BufferProcess,Transform,Z]).
+-module(mochiweb_buffer, [BufferProcess,Transform,TransformState]).
 -author('lgerbarg@gmail.com').
 
--export([append/1,flush/0]).
+-export([append/1,close/0]).
 
 -define(BUFFER_SIZE, 8192).
 
-push() ->
+push(Flush) ->
     BufferProcess ! {self(),push},
     receive
         Data ->
             case Transform of 
                 gzip ->
-                    zlib:gzip(Data);
+                    zlib:deflate(TransformState, Data,Flush);
                 _ ->
                     Data
             end
@@ -24,13 +24,26 @@ append(Data) ->
     receive
         Count ->
             if Count >= ?BUFFER_SIZE ->
-                push();
+                case push(none) of
+                    [] ->
+                        ok;
+                    <<>> ->
+                        ok;
+                    ReturnData ->
+                        ReturnData
+                end;
             true ->
                 ok
             end
      end.
 
-flush() ->
-    Retval = push(),
+close() ->
+    Data = push(finish),
+    if TransformState =/= none ->
+        zlib:deflateEnd(TransformState),
+        zlib:close(TransformState);
+    true ->
+        ok
+    end,
     BufferProcess ! shutdown,
-    Retval.
+    Data.

@@ -16,12 +16,12 @@
 -export([start_link/0, stop/0, handle_request/3]).
 
 -export([header_value/2,header_value/3,qs_value/2,qs_value/3,qs/1,path/1,absolute_uri/2]).
--export([verify_is_server_admin/1,unquote/1,quote/1,recv/2]).
+-export([verify_is_server_admin/1,unquote/1,quote/1,recv/2,recv_chunked/4]).
 -export([parse_form/1,json_body/1,body/1,doc_etag/1, make_etag/1, etag_respond/3]).
 -export([primary_header_value/2,partition/1,serve_file/3]).
 -export([start_chunked_response/3,send_chunk/2]).
 -export([start_json_response/2, start_json_response/3, end_json_response/1]).
--export([send_response/4,send_method_not_allowed/2,send_error/4]).
+-export([send_response/4,send_method_not_allowed/2,send_error/4, send_redirect/2]).
 -export([send_json/2,send_json/3,send_json/4]).
 -export([default_authentication_handler/1,special_test_authentication_handler/1]).
 
@@ -260,6 +260,12 @@ parse_form(#httpd{mochi_req=MochiReq}) ->
 recv(#httpd{mochi_req=MochiReq}, Len) ->
     MochiReq:recv(Len).
 
+recv_chunked(#httpd{mochi_req=MochiReq}, MaxChunkSize, ChunkFun, InitState) ->
+    % Fun is called once with each chunk
+    % Fun({Length, Binary}, State)
+    % called with Length == 0 on the last time.
+    MochiReq:stream_body(MaxChunkSize, ChunkFun, InitState).
+
 body(#httpd{mochi_req=MochiReq}) ->
     % Maximum size of document PUT request body (4GB)
     MaxSize = list_to_integer(
@@ -381,6 +387,8 @@ send_error(Req, {not_found, Reason}) ->
     send_error(Req, 404, <<"not_found">>, Reason);
 send_error(Req, conflict) ->
     send_error(Req, 409, <<"conflict">>, <<"Document update conflict.">>);
+send_error(Req, {invalid_doc, Reason}) ->
+    send_error(Req, 400, <<"invalid_doc">>, Reason);
 send_error(Req, {forbidden, Msg}) ->
     send_json(Req, 403,
         {[{<<"error">>,  <<"forbidden">>},
@@ -433,7 +441,9 @@ send_error(Req, Code, Error, <<>>) ->
 send_error(Req, Code, Error, Msg) ->
     send_json(Req, Code, {[{<<"error">>, Error}, {<<"reason">>, Msg}]}).
     
-
+send_redirect(Req, Path) ->
+    Headers = [{"Location", couch_httpd:absolute_uri(Req, Path)}],
+    send_response(Req, 301, Headers, <<>>).
 
 negotiate_content_type(#httpd{mochi_req=MochiReq}) ->
     %% Determine the appropriate Content-Type header for a JSON response

@@ -13,7 +13,7 @@
 -module(couch_httpd_db).
 -include("couch_db.hrl").
 
--export([handle_request/1, db_req/2, couch_doc_open/4]).
+-export([handle_request/1, handle_design_req/2, db_req/2, couch_doc_open/4]).
 
 -import(couch_httpd,
     [send_json/2,send_json/3,send_json/4,send_method_not_allowed/2,
@@ -40,6 +40,16 @@ handle_request(#httpd{path_parts=[DbName|RestParts],method=Method,
         Handler = couch_util:dict_find(SecondPart, DbUrlHandlers, fun db_req/2),
         do_db_req(Req, Handler)
     end.
+
+handle_design_req(#httpd{
+        path_parts=[_DbName,_Design,_DesName, <<"_",_/binary>> = Action | _Rest],
+        design_url_handlers = DesignUrlHandlers
+    }=Req, Db) ->
+    Handler = couch_util:dict_find(Action, DesignUrlHandlers, fun db_req/2),
+    Handler(Req, Db);
+    
+handle_design_req(Req, Db) ->
+    db_req(Req, Db).
 
 create_db_req(#httpd{user_ctx=UserCtx}=Req, DbName) ->
     ok = couch_httpd:verify_is_server_admin(Req),
@@ -80,7 +90,6 @@ db_req(#httpd{method='POST',path_parts=[DbName]}=Req, Db) ->
     Doc = couch_doc:from_json_obj(couch_httpd:json_body(Req)),
     DocId = couch_util:new_uuid(),
     {ok, NewRev} = couch_db:update_doc(Db, Doc#doc{id=DocId, revs=[]}, []),
-    % couch_stats_collector:increment({httpd, document_creates}),
     DocUrl = absolute_uri(Req, 
         binary_to_list(<<"/",DbName/binary,"/",DocId/binary>>)),
     send_json(Req, 201, [{"Location", DocUrl}], {[
@@ -117,6 +126,7 @@ db_req(#httpd{method='POST',path_parts=[_,<<"_bulk_docs">>]}=Req, Db) ->
         Docs = lists:map(
             fun({ObjProps} = JsonObj) ->
                 Doc = couch_doc:from_json_obj(JsonObj),
+                validate_attachment_names(Doc),
                 Id = case Doc#doc.id of
                     <<>> -> couch_util:new_uuid();
                     Id0 -> Id0
@@ -379,7 +389,6 @@ db_doc_req(#httpd{method='DELETE'}=Req, Db, DocId) ->
         couch_httpd:send_error(Req, 409, <<"missing_rev">>,
             <<"Document rev/etag must be specified to delete">>);
     RevToDelete ->
-        % couch_stats_collector:increment({httpd, document_deletes}),
         {ok, NewRev} = couch_db:delete_doc(Db, DocId, [RevToDelete]),
         send_json(Req, 200, {[
             {ok, true},
@@ -394,7 +403,6 @@ db_doc_req(#httpd{method='GET'}=Req, Db, DocId) ->
         open_revs = Revs,
         options = Options
     } = parse_doc_query(Req),
-    % couch_stats_collector:increment({httpd, document_reads}),
     case Revs of
     [] ->
         Doc = couch_doc_open(Db, DocId, Rev, Options),
@@ -439,7 +447,7 @@ db_doc_req(#httpd{method='POST'}=Req, Db, DocId) ->
     end,
 
     NewAttachments = [
-        {list_to_binary(Name), {list_to_binary(ContentType), Content}} ||
+        {validate_attachment_name(Name), {list_to_binary(ContentType), Content}} ||
         {Name, {ContentType, _}, Content} <-
         proplists:get_all_values("_attachments", Form)
     ],
@@ -463,6 +471,7 @@ db_doc_req(#httpd{method='PUT'}=Req, Db, DocId) ->
         [Rev0|_] -> Rev0;
         [] -> undefined
     end,
+    validate_attachment_names(Doc),
     case couch_httpd:header_value(Req, "X-Couch-Full-Commit", "false") of
     "true" ->
         Options = [full_commit];
@@ -471,10 +480,8 @@ db_doc_req(#httpd{method='PUT'}=Req, Db, DocId) ->
     end,
     case extract_header_rev(Req, ExplicitRev) of
     missing_rev ->
-        % couch_stats_collector:increment({httpd, document_creates}),
         Revs = [];
     Rev ->
-        % couch_stats_collector:increment({httpd, document_updates}),
         Revs = [Rev]
     end,
     {ok, NewRev} = couch_db:update_doc(Db, Doc#doc{id=DocId, revs=Revs}, Options),
@@ -498,7 +505,6 @@ db_doc_req(#httpd{method='COPY'}=Req, Db, SourceDocId) ->
 
     % save new doc
     {ok, NewTargetRev} = couch_db:update_doc(Db, Doc#doc{id=TargetDocId, revs=TargetRev}, []),
-    % couch_stats_collector:increment({httpd, document_copies}),
 
     send_json(Req, 201, [{"Etag", "\"" ++ binary_to_list(NewTargetRev) ++ "\""}], {[
         {ok, true},
@@ -525,7 +531,6 @@ db_doc_req(#httpd{method='MOVE'}=Req, Db, SourceDocId) ->
         #doc{id=SourceDocId, revs=[SourceRev], deleted=true}
         ],
     {ok, ResultRevs} = couch_db:update_docs(Db, Docs, []),
-    % couch_stats_collector:increment({httpd, document_moves}),
     
     DocResults = lists:zipwith(
         fun(FDoc, NewRev) ->
@@ -598,8 +603,11 @@ db_attachment_req(#httpd{method='GET'}=Req, Db, DocId, FileNameParts) ->
 
 db_attachment_req(#httpd{method=Method}=Req, Db, DocId, FileNameParts)
         when (Method == 'PUT') or (Method == 'DELETE') ->
-    FileName = list_to_binary(mochiweb_util:join(lists:map(fun binary_to_list/1, 
-        FileNameParts),"/")),
+    FileName = validate_attachment_name(
+                    mochiweb_util:join(
+                        lists:map(fun binary_to_list/1, 
+                            FileNameParts),"/")),
+    
     NewAttachment = case Method of
         'DELETE' ->
             [];
@@ -629,10 +637,8 @@ db_attachment_req(#httpd{method=Method}=Req, Db, DocId, FileNameParts)
 
     Doc = case extract_header_rev(Req, couch_httpd:qs_value(Req, "rev")) of
         missing_rev -> % make the new doc
-            % couch_stats_collector:increment({httpd, document_creates}),
             #doc{id=DocId};
         Rev ->
-            % couch_stats_collector:increment({httpd, document_updates}),
             case couch_db:open_doc_revs(Db, DocId, [Rev], []) of
             {ok, [{ok, Doc0}]}  -> Doc0#doc{revs=[Rev]};
             {ok, [Error]}       -> throw(Error)
@@ -717,3 +723,44 @@ parse_copy_destination_header(Req) ->
         {list_to_binary(DocId), [list_to_binary(Rev)]}
     end.
 
+validate_attachment_names(Doc) ->
+    lists:foreach(fun({Name, _}) -> 
+        validate_attachment_name(Name)
+    end, Doc#doc.attachments).
+
+validate_attachment_name(Name) when is_list(Name) ->
+    validate_attachment_name(list_to_binary(Name));
+validate_attachment_name(<<"_",_/binary>>) ->
+    throw({bad_request, <<"Attachment name can't start with '_'">>});
+validate_attachment_name(Name) ->
+    case is_valid_utf8(Name) of
+        true -> Name;
+        false -> throw({bad_request, <<"Attachment name is not UTF-8 encoded">>})
+    end.
+
+%% borrowed from mochijson2:json_bin_is_safe()
+is_valid_utf8(<<>>) ->
+    true;
+is_valid_utf8(<<C, Rest/binary>>) ->
+    case C of
+        $\" ->
+            false;
+        $\\ ->
+            false;
+        $\b ->
+            false;
+        $\f ->
+            false;
+        $\n ->
+            false;
+        $\r ->
+            false;
+        $\t ->
+            false;
+        C when C >= 0, C < $\s; C >= 16#7f, C =< 16#10FFFF ->
+            false;
+        C when C < 16#7f ->
+            is_valid_utf8(Rest);
+        _ ->
+            false
+    end.

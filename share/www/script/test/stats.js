@@ -56,21 +56,21 @@ couchTests.stats = function(debug) {
           value: max.toString()}],
 
         function () {
-          var files_open = requestStatsTest("couchdb", "os_files_open").current;
+          var files_open = requestStatsTest("couchdb", "open_os_files").current;
           for(var i=0; i<max+1; i++) {
             var db = new CouchDB("test_suite_db" + i);
             db.deleteDb();
             db.createDb();
           }
 
-          var open_databases = requestStatsTest("couchdb", "open_databases").max;
-          T(max >= open_databases, name);
+          var open_databases = requestStatsTest("couchdb", "open_os_files").max;
+          T(open_databases > 0 && max >= open_databases, name);
 
           for(var i=0; i<max+1; i++) {
             var db = new CouchDB("test_suite_db" + i);
             db.deleteDb();
           }
-          T(files_open == requestStatsTest("couchdb", "os_files_open").current);
+          T(files_open == requestStatsTest("couchdb", "open_os_files").current);
         })
     },
  };
@@ -187,22 +187,22 @@ couchTests.stats = function(debug) {
  
  var http_requests_by_method_tests = {
    'should count GET requests': function(name) {
-     var requests = requestStatsTest("httpd", "get_requests").current;
-     var new_requests = requestStatsTest("httpd", "get_requests").current;
+     var requests = requestStatsTest("httpd_request_methods", "GET").current;
+     var new_requests = requestStatsTest("httpd_request_methods", "GET").current;
 
      TEquals(requests + 1, new_requests, name);
    },
    'should not count GET requests for POST request': function(name) {
-     var requests = requestStatsTest("httpd", "get_requests").current;
+     var requests = requestStatsTest("httpd_request_methods", "GET").current;
      CouchDB.request("POST", "/");
-     var new_requests = requestStatsTest("httpd", "get_requests").current;
+     var new_requests = requestStatsTest("httpd_request_methods", "GET").current;
 
      TEquals(requests + 1, new_requests, name);        
    },
    'should count POST requests': function(name) {
-     var requests = requestStatsTest("httpd", "post_requests").current;
+     var requests = requestStatsTest("httpd_request_methods", "POST").current;
      CouchDB.request("POST", "/");
-     var new_requests = requestStatsTest("httpd", "post_requests").current;
+     var new_requests = requestStatsTest("httpd_request_methods", "POST").current;
 
      TEquals(requests + 1, new_requests, name);
    }
@@ -214,9 +214,9 @@ couchTests.stats = function(debug) {
      db.deleteDb();
      db.createDb();
 
-     var creates = requestStatsTest("couchdb", "database_changes").current;
+     var creates = requestStatsTest("couchdb", "database_writes").current;
      db.save({"a":"1"});
-     var new_creates = requestStatsTest("couchdb", "database_changes").current;
+     var new_creates = requestStatsTest("couchdb", "database_writes").current;
 
      TEquals(creates + 1, new_creates, name);
    },
@@ -228,9 +228,9 @@ couchTests.stats = function(debug) {
      var doc = {"_id":"test"};
      db.save(doc);
      
-     var updates = requestStatsTest("couchdb", "database_changes").current;
+     var updates = requestStatsTest("couchdb", "database_writes").current;
      db.save(doc);
-     var new_updates = requestStatsTest("couchdb", "database_changes").current;
+     var new_updates = requestStatsTest("couchdb", "database_writes").current;
 
      TEquals(updates + 1, new_updates, name);
    },
@@ -242,9 +242,9 @@ couchTests.stats = function(debug) {
      var doc = {"_id":"test"};
      db.save(doc);
      
-     var deletes = requestStatsTest("couchdb", "database_changes").current;
+     var deletes = requestStatsTest("couchdb", "database_writes").current;
      db.deleteDoc(doc);
-     var new_deletes = requestStatsTest("couchdb", "database_changes").current;
+     var new_deletes = requestStatsTest("couchdb", "database_writes").current;
 
      TEquals(deletes + 1, new_deletes, name);
    },
@@ -256,11 +256,11 @@ couchTests.stats = function(debug) {
      var doc = {"_id":"test"};
      db.save(doc);
 
-     var copies = requestStatsTest("couchdb", "database_changes").current;
+     var copies = requestStatsTest("couchdb", "database_writes").current;
      CouchDB.request("COPY", "/test_suite_db/test", {
        headers: {"Destination":"copy_of_test"}
      });
-     var new_copies = requestStatsTest("couchdb", "database_changes").current;
+     var new_copies = requestStatsTest("couchdb", "database_writes").current;
 
      TEquals(copies + 1, new_copies, name);
    },
@@ -272,11 +272,11 @@ couchTests.stats = function(debug) {
      var doc = {"_id":"test"};
      db.save(doc);
 
-     var moves = requestStatsTest("couchdb", "database_changes").current;
+     var moves = requestStatsTest("couchdb", "database_writes").current;
      CouchDB.request("MOVE", "/test_suite_db/test?rev=" + doc._rev, {
        headers: {"Destination":"move_of_test"}
      });
-     var new_moves = requestStatsTest("couchdb", "database_changes").current;
+     var new_moves = requestStatsTest("couchdb", "database_writes").current;
 
      TEquals(moves + 1, new_moves, name);
    },
@@ -299,9 +299,9 @@ couchTests.stats = function(debug) {
      db.deleteDb();
      db.createDb();
 
-     var creates = requestStatsTest("couchdb", "database_changes").current;
+     var creates = requestStatsTest("couchdb", "database_writes").current;
      CouchDB.request("POST", "/test_suite_db", {body:'{"a":"1"}'});
-     var new_creates = requestStatsTest("couchdb", "database_changes").current;
+     var new_creates = requestStatsTest("couchdb", "database_writes").current;
 
      TEquals(creates + 1, new_creates, name);
    },
@@ -310,12 +310,12 @@ couchTests.stats = function(debug) {
      db.deleteDb();
      db.createDb();
 
-     var creates = requestStatsTest("couchdb", "database_changes").current;
+     var creates = requestStatsTest("couchdb", "database_writes").current;
      CouchDB.request("PUT", "/test_suite_db/bin_doc2/foo2.txt", {
            body:"This is no base64 encoded text",
            headers:{"Content-Type": "text/plain;charset=utf-8"}
      });
-     var new_creates = requestStatsTest("couchdb", "database_changes").current;
+     var new_creates = requestStatsTest("couchdb", "database_writes").current;
      TEquals(creates + 1, new_creates, name);
    },
    'should increment database changes counter when adding attachment to existing doc': function(name) {
@@ -326,12 +326,12 @@ couchTests.stats = function(debug) {
      var doc = {_id:"test"};
      db.save(doc);
 
-     var updates = requestStatsTest("couchdb", "database_changes").current;
+     var updates = requestStatsTest("couchdb", "database_writes").current;
      CouchDB.request("PUT", "/test_suite_db/test/foo2.txt?rev=" + doc._rev, {
            body:"This is no base64 encoded text",
            headers:{"Content-Type": "text/plain;charset=utf-8"}
      });
-     var new_updates = requestStatsTest("couchdb", "database_changes").current;
+     var new_updates = requestStatsTest("couchdb", "database_writes").current;
      TEquals(updates + 1, new_updates, name);
    }
 
@@ -341,9 +341,9 @@ couchTests.stats = function(debug) {
      var db = new CouchDB("nonexistant_db");
      db.deleteDb();
 
-     var not_founds = requestStatsTest("http_status_codes", "404").current;
+     var not_founds = requestStatsTest("httpd_status_codes", "404").current;
      CouchDB.request("GET", "/nonexistant_db");
-     var new_not_founds = requestStatsTest("http_status_codes", "404").current;
+     var new_not_founds = requestStatsTest("httpd_status_codes", "404").current;
 
      TEquals(not_founds + 1, new_not_founds, name);
    },
@@ -393,7 +393,7 @@ couchTests.stats = function(debug) {
      options.headers = {"Accept": "application/json"};
      var summary = JSON.parse(CouchDB.request("GET", "/_stats", options).responseText);
      var aggregates = ["mean", "min", "max", "stddev", 
-       "current", "resolution"];
+       "current"];
 
      for(var i in aggregates) {
        T(summary.httpd.requests[aggregates[i]] >= 0, aggregates[i] + " >= 0", name);

@@ -15,7 +15,7 @@ SUBDIRS = couchdb default init launchd logrotate.d
 default_sysconf_data = logrotate.d/couchdb
 
 if INIT
-dist_init_sysconf_data = default/couchdb
+init_sysconf_data = default/couchdb
 init_DATA = init/couchdb
 endif
 
@@ -24,6 +24,8 @@ launchd_DATA = launchd/org.apache.couchdb.plist
 endif
 
 nobase_sysconf_DATA = $(default_sysconf_data) $(init_sysconf_data)
+
+EXTRA_DIST = $(init_sysconf_data)
 
 CLEANFILES = $(init_DATA) $(default_sysconf_data) $(launchd_DATA)
 

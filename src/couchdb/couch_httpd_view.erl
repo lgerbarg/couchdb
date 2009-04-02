@@ -97,6 +97,7 @@ output_map_view(Req, View, Group, Db, QueryArgs, nil) ->
         start_key = StartKey,
         start_docid = StartDocId
     } = QueryArgs,
+    validate_map_query(QueryArgs),
     CurrentEtag = view_group_etag(Group),
     couch_httpd:etag_respond(Req, CurrentEtag, fun() -> 
         {ok, RowCount} = couch_view:get_row_count(View),
@@ -114,6 +115,7 @@ output_map_view(Req, View, Group, Db, QueryArgs, Keys) ->
         skip = SkipCount,
         start_docid = StartDocId
     } = QueryArgs,
+    validate_map_query(QueryArgs),
     CurrentEtag = view_group_etag(Group, Keys),
     couch_httpd:etag_respond(Req, CurrentEtag, fun() ->     
         {ok, RowCount} = couch_view:get_row_count(View),
@@ -133,6 +135,13 @@ output_map_view(Req, View, Group, Db, QueryArgs, Keys) ->
             end, {ok, FoldAccInit}, Keys),
         finish_view_fold(Req, RowCount, FoldResult)
     end).
+
+validate_map_query(QueryArgs) ->
+    case QueryArgs#view_query_args.group_level of
+    0 -> ok;
+    _ ->
+        throw({query_parse_error, <<"Query parameter \"group\" and/or \"group_level\" are invalid for map views.">>})
+    end.
 
 output_reduce_view(Req, View, Group, QueryArgs, nil) ->
     #view_query_args{
@@ -259,7 +268,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 Args#view_query_args{start_key=JsonKey,end_key=JsonKey};
             _ ->
                 Msg = io_lib:format("Query parameter \"~s\" not compatible with multi key mode.", [Key]),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
         {"startkey_docid", DocId} ->
             Args#view_query_args{start_docid=list_to_binary(DocId)};
@@ -271,7 +280,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 Args#view_query_args{start_key=?JSON_DECODE(Value)};
             _ ->
                 Msg = io_lib:format("Query parameter \"~s\" not compatible with multi key mode.", [Key]),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
         {"endkey", Value} ->
             case Keys of
@@ -279,27 +288,27 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 Args#view_query_args{end_key=?JSON_DECODE(Value)};
             _ ->
                 Msg = io_lib:format("Query parameter \"~s\" not compatible with multi key mode.", [Key]),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
         {"limit", Value} ->
             case (catch list_to_integer(Value)) of
             Limit when is_integer(Limit) ->
                 if Limit < 0 ->
                     Msg = io_lib:format("Limit must be a positive integer: limit=~s", [Value]),
-                    throw({query_parse_error, Msg});
+                    throw({query_parse_error, ?l2b(Msg)});
                 true ->
                     Args#view_query_args{limit=Limit}
                 end;
             _Error ->
                 Msg = io_lib:format("Bad URL query value, number expected: limit=~s", [Value]),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
         {"count", Value} ->
-            throw({query_parse_error, "URL query parameter 'count' has been changed to 'limit'."});
+            throw({query_parse_error, <<"URL query parameter 'count' has been changed to 'limit'.">>});
         {"stale", "ok"} ->
             Args#view_query_args{stale=ok};
         {"update", "false"} ->
-            throw({query_parse_error, "URL query parameter 'update=false' has been changed to 'stale=ok'."});
+            throw({query_parse_error, <<"URL query parameter 'update=false' has been changed to 'stale=ok'.">>});
         {"descending", "true"} ->
             case Args#view_query_args.direction of
             fwd ->
@@ -329,7 +338,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
             _Error ->
                 Msg = lists:flatten(io_lib:format(
                 "Bad URL query value, number expected: skip=~s", [Value])),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
         {"group", Value} ->
             case Value of
@@ -339,7 +348,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 Args#view_query_args{group_level=0};
             _ ->
                 Msg = "Bad URL query value for 'group' expected \"true\" or \"false\".",
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
         {"group_level", LevelStr} ->
             case Keys of
@@ -347,8 +356,12 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 Args#view_query_args{group_level=list_to_integer(LevelStr)};
             _ ->
                 Msg = lists:flatten(io_lib:format("Multi-key fetches for a reduce view must include group=true", [])),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end;
+        {"inclusive_end", "true"} ->
+            Args#view_query_args{inclusive_end=true};
+        {"inclusive_end", "false"} ->
+            Args#view_query_args{inclusive_end=false};
         {"reduce", "true"} ->
             Args#view_query_args{reduce=true};
         {"reduce", "false"} ->
@@ -361,7 +374,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 Args#view_query_args{include_docs=false};
             _ ->
                 Msg1 = "Bad URL query value for 'include_docs' expected \"true\" or \"false\".",
-                throw({query_parse_error, Msg1})
+                throw({query_parse_error, ?l2b(Msg1)})
             end;
         {"format", _} ->
             % we just ignore format, so that JS can have it
@@ -373,7 +386,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
             false ->
                 Msg = lists:flatten(io_lib:format(
                     "Bad URL query key:~s", [Key])),
-                throw({query_parse_error, Msg})
+                throw({query_parse_error, ?l2b(Msg)})
             end
         end
     end, #view_query_args{}, QueryList),
@@ -381,7 +394,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
     true ->
         case QueryArgs#view_query_args.include_docs and QueryArgs#view_query_args.reduce of
         true ->
-            ErrMsg = "Bad URL query key for reduce operation: include_docs",
+            ErrMsg = <<"Bad URL query key for reduce operation: include_docs">>,
             throw({query_parse_error, ErrMsg});
         _ ->
             ok
@@ -404,8 +417,7 @@ parse_view_query(Req, Keys, IsReduce, IgnoreExtra) ->
                 #view_query_args{reduce=OptReduce} = QueryArgs,
                 case OptReduce of
                 true ->
-                    Msg = lists:flatten(io_lib:format(
-                        "Multi-key fetches for a reduce view must include group=true", [])),
+                    Msg = <<"Multi-key fetches for a reduce view must include group=true">>,
                     throw({query_parse_error, Msg});
                 _ -> 
                     QueryArgs
@@ -419,6 +431,7 @@ make_view_fold_fun(Req, QueryArgs, Etag, Db,
     #view_query_args{
         end_key = EndKey,
         end_docid = EndDocId,
+        inclusive_end = InclusiveEnd,
         direction = Dir
     } = QueryArgs,
     
@@ -427,7 +440,8 @@ make_view_fold_fun(Req, QueryArgs, Etag, Db,
         start_response = StartRespFun,
         send_row = SendRowFun,
         reduce_count = ReduceCountFun
-    } = apply_default_helper_funs(HelperFuns, {Dir, EndKey, EndDocId}),
+    } = apply_default_helper_funs(HelperFuns, 
+        {Dir, EndKey, EndDocId, InclusiveEnd}),
 
     #view_query_args{
         include_docs = IncludeDocs
@@ -467,9 +481,9 @@ apply_default_helper_funs(#view_fold_helper_funs{
     passed_end = PassedEnd,
     start_response = StartResp,
     send_row = SendRow
-}=Helpers, {Dir, EndKey, EndDocId}) ->
+}=Helpers, {Dir, EndKey, EndDocId, InclusiveEnd}) ->
     PassedEnd2 = case PassedEnd of
-    undefined -> make_passed_end_fun(Dir, EndKey, EndDocId);
+    undefined -> make_passed_end_fun(Dir, EndKey, EndDocId, InclusiveEnd);
     _ -> PassedEnd
     end,
 
@@ -508,15 +522,33 @@ apply_default_helper_funs(#reduce_fold_helper_funs{
         send_row = SendRow2
     }.
 
-make_passed_end_fun(Dir, EndKey, EndDocId) ->
-    case Dir of
-    fwd ->
+make_passed_end_fun(fwd, EndKey, EndDocId, InclusiveEnd) ->
+    case InclusiveEnd of
+    true ->
         fun(ViewKey, ViewId) ->
             couch_view:less_json([EndKey, EndDocId], [ViewKey, ViewId])
         end;
-    rev->
+    false ->
+        fun
+            (ViewKey, _ViewId) when ViewKey == EndKey ->
+                true;
+            (ViewKey, ViewId) ->
+                couch_view:less_json([EndKey, EndDocId], [ViewKey, ViewId])
+        end
+    end;
+
+make_passed_end_fun(rev, EndKey, EndDocId, InclusiveEnd) ->
+    case InclusiveEnd of
+    true ->
         fun(ViewKey, ViewId) ->
             couch_view:less_json([ViewKey, ViewId], [EndKey, EndDocId])
+        end;
+    false->
+        fun
+            (ViewKey, _ViewId) when ViewKey == EndKey ->
+                true;
+            (ViewKey, ViewId) ->
+                couch_view:less_json([ViewKey, ViewId], [EndKey, EndDocId])
         end
     end.
 
@@ -565,14 +597,14 @@ view_row_obj(Db, {{Key, DocId}, Value}, IncludeDocs) ->
         true ->
             Rev = case Value of
             {Props} ->
-                case is_list(Props) of
-                true ->
-                    proplists:get_value(<<"_rev">>, Props, []);
-                _ ->
-                    []
+                case proplists:get_value(<<"_rev">>, Props) of
+                undefined ->
+                    nil;
+                Rev0 ->
+                    couch_doc:parse_rev(Rev0)
                 end;
             _ ->
-                []
+                nil
             end,
             ?LOG_DEBUG("Include Doc: ~p ~p", [DocId, Rev]),
             case (catch couch_httpd_db:couch_doc_open(Db, DocId, Rev, [])) of

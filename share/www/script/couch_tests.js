@@ -30,7 +30,7 @@ loadTest("delayed_commits.js");
 loadTest("all_docs.js");
 loadTest("conflicts.js");
 loadTest("recreate_doc.js");
-loadTest("copy_move_doc.js");
+loadTest("copy_doc.js");
 loadTest("uuids.js");
 loadTest("bulk_docs.js");
 loadTest("lots_of_docs.js");
@@ -55,6 +55,7 @@ loadTest("view_include_docs.js");
 loadTest("view_multi_key_all_docs.js");
 loadTest("view_multi_key_design.js");
 loadTest("view_multi_key_temp.js");
+loadTest("view_offsets.js");
 loadTest("view_pagination.js");
 loadTest("view_sandboxing.js");
 loadTest("view_xml.js");
@@ -68,6 +69,7 @@ loadTest("purge.js");
 loadTest("config.js");
 loadTest("security_validation.js");
 loadTest("stats.js");
+loadTest("rev_stemming.js");
 
 function makeDocs(start, end, templateDoc) {
   var templateDocSrc = templateDoc ? JSON.stringify(templateDoc) : "{}"

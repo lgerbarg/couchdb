@@ -76,7 +76,7 @@ nobase_dist_localdata_DATA = \
     www/script/test/all_docs.js \
     www/script/test/conflicts.js \
     www/script/test/recreate_doc.js \
-    www/script/test/copy_move_doc.js \
+    www/script/test/copy_doc.js \
     www/script/test/uuids.js \
     www/script/test/bulk_docs.js \
     www/script/test/lots_of_docs.js \
@@ -100,10 +100,12 @@ nobase_dist_localdata_DATA = \
     www/script/test/view_multi_key_all_docs.js \
     www/script/test/view_multi_key_design.js \
     www/script/test/view_multi_key_temp.js \
+	www/script/test/view_offsets.js \
     www/script/test/view_pagination.js \
     www/script/test/view_sandboxing.js \
     www/script/test/view_xml.js \
     www/script/test/replication.js \
+    www/script/test/rev_stemming.js \
     www/script/test/etags_head.js \
     www/script/test/etags_views.js \
     www/script/test/show_documents.js \

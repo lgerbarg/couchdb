@@ -5,14 +5,6 @@ Apache CouchDB is alpha software and still under heavy development. Please be
 aware that important areas such as the public API or internal database format
 may see backwards incompatible changes between versions.
 
-Apache CouchDB is an effort undergoing incubation at the Apache Software
-Foundation (ASF), sponsored by the Apache Incubator PMC. Incubation is required
-of all newly accepted projects until a further review indicates that the
-infrastructure, communications, and decision making process have stabilized in a
-manner consistent with other successful ASF projects. While incubation status is
-not necessarily a reflection of the completeness or stability of the code, it
-does indicate that the project has yet to be fully endorsed by the ASF.
-
 Building From Checkout
 ----------------------
 
@@ -154,23 +146,30 @@ You should make sure that the `couchdb` user has a working POSIX shell and set
 the home directory to `/usr/local/var/lib/couchdb` which is the Apache CouchDB
 database directory.
 
-Change the ownership of the Apache CouchDB data directories by running:
+Change the ownership of the Apache CouchDB directories by running:
 
-    chown -R couchdb /usr/local/var/lib/couchdb
-    chown -R couchdb /usr/local/var/log/couchdb
+    chown -R couchdb:couchdb /usr/local/etc/couchdb
+    chown -R couchdb:couchdb /usr/local/var/lib/couchdb
+    chown -R root:couchdb /usr/local/var/log/couchdb
+
+Change the permission of the Apache CouchDB directories by running:
+
+    chmod -R 0770 /usr/local/etc/couchdb
+    chmod -R 0770 /usr/local/var/lib/couchdb
+    chmod -R 0770 /usr/local/var/log/couchdb
 
 Running Manually
 ^^^^^^^^^^^^^^^^
 
 You can start the Apache CouchDB server by running:
 
-    sudo -i -u couchdb couchdb
+    sudo -i -u couchdb couchdb -b
 
 This uses the `sudo` command to run the `couchdb` command as the `couchdb` user.
 
 When Apache CouchDB starts it should eventually display the following message:
 
-    Apache CouchDB has started, time to relax. See http://127.0.0.1:5984/_utils/index.html
+    Apache CouchDB has started, time to relax.
 
 Relax.
 

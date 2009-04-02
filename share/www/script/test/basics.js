@@ -14,19 +14,30 @@
 couchTests.basics = function(debug) {
     var result = JSON.parse(CouchDB.request("GET", "/").responseText);
     T(result.couchdb == "Welcome"); 
-    
+
     var db = new CouchDB("test_suite_db");
     db.deleteDb();
 
     // bug COUCHDB-100: DELETE on non-existent DB returns 500 instead of 404
     db.deleteDb();
-    
-db.createDb();
+
+    db.createDb();
 
     // PUT on existing DB should return 412 instead of 500
     xhr = CouchDB.request("PUT", "/test_suite_db/");
     T(xhr.status == 412);
     if (debug) debugger;
+
+    // creating a new DB should return Location header
+    xhr = CouchDB.request("DELETE", "/new-db");
+    xhr = CouchDB.request("PUT", "/new-db");
+    TEquals("/new-db", 
+      xhr.getResponseHeader("Location").substr(-7),
+      "should return Location header to newly created document");
+
+    TEquals("http://", 
+      xhr.getResponseHeader("Location").substr(0, 7),
+      "should return absolute Location header to newly created document");
 
     // Get the database info, check the db_name
     T(db.info().db_name == "test_suite_db");
@@ -122,14 +133,14 @@ db.createDb();
 
     // make sure we can still open the old rev of the deleted doc
     T(db.open(existingDoc._id, {rev: existingDoc._rev}) != null);
-    
+
     // make sure restart works
     T(db.ensureFullCommit().ok);
     restartServer();
-    
+
     // make sure we can still open
     T(db.open(existingDoc._id, {rev: existingDoc._rev}) != null);
-    
+
     // test that the POST response has a Location header
     var xhr = CouchDB.request("POST", "/test_suite_db", {
       body: JSON.stringify({"foo":"bar"})
@@ -140,5 +151,21 @@ db.createDb();
     T(loc, "should have a Location header");
     var locs = loc.split('/');
     T(locs[4] == resp.id);
-    T(locs[3] == "test_suite_db");    
+    T(locs[3] == "test_suite_db");
+
+    // document put's should return a Location header
+    var xhr = CouchDB.request("PUT", "/test_suite_db/newdoc", {
+      body: JSON.stringify({"a":1})
+    });
+    TEquals("/test_suite_db/newdoc", 
+      xhr.getResponseHeader("Location").substr(-21),
+      "should return Location header to newly created document");
+
+    TEquals("http://", 
+      xhr.getResponseHeader("Location").substr(0, 7),
+      "should return absolute Location header to newly created document");
+
+    // deleting a non-existent doc should be 404
+    xhr = CouchDB.request("DELETE", "/test_suite_db/doc-does-not-exist");
+    T(xhr.status == 404);
   };

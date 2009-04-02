@@ -1,40 +1,51 @@
 Apache CouchDB NEWS
 ===================
 
-For details on backwards incompatible changes between releases, please see:
+For details about backwards incompatible changes, please see:
 
-  http://wiki.apache.org/couchdb/BreakingChanges
+  http://wiki.apache.org/couchdb/Breaking_changes
 
-Version 0.9.0-incubating
-------------------------
+Each release section notes when backwards incompatible changes have been made.
 
-This release is still under development.
+Version 0.9.0
+-------------
+
+This release contains backwards incompatible changes, please see above for help.
+
+ * Modular configuration.
+ * Performance enhancements for document and view access.
+ * More resilient replication process.
+ * Replication streams binary attachments.
+ * Administrator role and basic authentication.
+ * Document validation functions in design documents.
+ * Show and list functions for rendering documents and views as developer
+   controlled content-types.
+ * External process server module.
+ * Attachment uploading from Futon.
+ * Etags for views, lists, shows, document and attachment requests.
+ * Miscellaneous improvements to build, system integration, and portability.
 
 Version 0.8.1-incubating
 ------------------------
 
  * Various bug fixes for replication, compaction, the HTTP interface and the
-   Javascript View Server.
+   JavaScript View Server.
 
 Version 0.8.0-incubating
 ------------------------
 
-Released under the patronage of the Apache Software Foundation Incubator.
+This release contains backwards incompatible changes, please see above for help.
 
  * Changed core licensing to the Apache Software License 2.0.
  * Refactoring of the core view and storage engines.
  * Added support for incremental map/reduce views.
  * Changed database file format.
  * Many improvements to Futon, the web administration interface.
- * Miscellaneous improvements to system integration and portability.
+ * Miscellaneous improvements to build, system integration, and portability.
  * Swapped out Erlang's inets HTTP server for the Mochiweb HTTP server.
  * SpiderMonkey is no longer included with CouchDB, but rather treated as an
    external dependency.
  * Added bits of awesome.
-
-Please note that there have been many backwards incomatible changes in this
-release. See http://wiki.apache.org/couchdb/BreakingChanges for more information
-and some tips for upgrading.
 
 Version 0.7.2
 -------------
@@ -73,13 +84,13 @@ Version 0.5.0
 Version 0.4.0
 -------------
 
- * Non-existant variables are now nil lists.
+ * Non-existent variables are now nil lists.
  * Couch error codes and messages are no longer sent in the HTTP fields,
    instead they are exclusively returned in the XML body. This is to avoid HTTP
    header parsing problems with oddly formed error messages.
  * Returned error messages are now logged at the server at the `info` level to
    make general debugging easier.
- * Fixed a problem where big table builds caused timesout errors.
+ * Fixed a problem where big table builds caused timeout errors.
  * Lots of changes in the low level machinery. Most formulas will continue to
    function the same.
  * Added full compiler support for extended characters in formula source.
